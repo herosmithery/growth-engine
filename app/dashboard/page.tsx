@@ -318,7 +318,7 @@ export default function HomePage() {
           <AlertCircle className="w-10 h-10 text-[var(--warning)]" />
         </div>
         <div className="text-center">
-          <h2 className="text-xl font-semibold text-[var(--foreground)] mb-2">Welcome to Growth Engine</h2>
+          <h2 className="text-xl font-semibold text-[var(--foreground)] mb-2">Welcome to Growth Engine by Scale with Jak</h2>
           <p className="text-[var(--foreground-muted)]">Please sign in to view your clinic dashboard.</p>
         </div>
       </div>

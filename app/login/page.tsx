@@ -62,11 +62,11 @@ export default function LoginPage() {
             <Card className="w-full max-w-md">
                 <CardHeader className="text-center">
                     <div className="mx-auto mb-4 w-12 h-12 bg-gray-900 dark:bg-white rounded-lg flex items-center justify-center">
-                        <span className="text-white dark:text-gray-900 font-bold text-lg">MS</span>
+                        <span className="text-white dark:text-gray-900 font-bold text-lg">SJ</span>
                     </div>
                     <CardTitle className="text-2xl">Welcome back</CardTitle>
                     <CardDescription>
-                        Sign in to your Growth Engine account
+                        Sign in to your Growth Engine account by Scale with Jak
                     </CardDescription>
                 </CardHeader>
                 <CardContent>

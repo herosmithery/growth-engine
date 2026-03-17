@@ -98,16 +98,36 @@ function ClientsTab() {
         async function fetchBusinesses() {
             try {
                 setLoading(true);
-                const { data, error } = await supabase
+                // 1. Fetch businesses
+                const { data: busData, error: busError } = await supabase
                     .from('businesses')
                     .select('id, name, phone, email, status, crm_type, created_at')
                     .order('created_at', { ascending: false });
 
-                if (error) {
-                    throw error;
-                }
+                if (busError) throw busError;
 
-                setBusinesses(data || []);
+                // 2. Fetch aggregate stats for each business
+                const busWithStats = await Promise.all((busData || []).map(async (biz) => {
+                    // Count calls
+                    const { count: callCount } = await supabase
+                        .from('call_logs')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('business_id', biz.id);
+
+                    // Count clients (leads)
+                    const { count: leadCount } = await supabase
+                        .from('clients')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('business_id', biz.id);
+
+                    return {
+                        ...biz,
+                        callCount: callCount || 0,
+                        leadCount: leadCount || 0
+                    };
+                }));
+
+                setBusinesses(busWithStats as any);
             } catch (err) {
                 console.error('Error fetching businesses:', err);
                 setError(err instanceof Error ? err.message : 'Failed to load businesses');
@@ -171,32 +191,47 @@ function ClientsTab() {
                                 <tr>
                                     <th className="p-4 font-medium">Business Name</th>
                                     <th className="p-4 font-medium">Status</th>
+                                    <th className="p-4 font-medium">Total Calls</th>
+                                    <th className="p-4 font-medium">Leads</th>
                                     <th className="p-4 font-medium">CRM</th>
-                                    <th className="p-4 font-medium">Email</th>
-                                    <th className="p-4 font-medium">Phone</th>
                                     <th className="p-4 font-medium text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {businesses.map((business) => (
+                                {businesses.map((business: any) => (
                                     <tr key={business.id} className="border-t hover:bg-muted/50">
-                                        <td className="p-4 font-medium">{business.name}</td>
+                                        <td className="p-4">
+                                            <div className="font-medium">{business.name}</div>
+                                            <div className="text-xs text-muted-foreground">{business.email || 'No email'}</div>
+                                        </td>
                                         <td className="p-4">
                                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${business.status === 'active'
-                                                    ? 'bg-green-100 text-green-800'
-                                                    : business.status === 'setup'
-                                                        ? 'bg-yellow-100 text-yellow-800'
-                                                        : 'bg-gray-100 text-gray-800'
+                                                ? 'bg-green-100 text-green-800'
+                                                : business.status === 'setup'
+                                                    ? 'bg-yellow-100 text-yellow-800'
+                                                    : 'bg-gray-100 text-gray-800'
                                                 }`}>
                                                 {business.status || 'Unknown'}
                                             </span>
                                         </td>
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-1.5">
+                                                <Activity className="h-3.5 w-3.5 text-blue-500" />
+                                                <span className="font-semibold">{business.callCount}</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-1.5">
+                                                <Users className="h-3.5 w-3.5 text-sage-500" />
+                                                <span className="font-semibold">{business.leadCount}</span>
+                                            </div>
+                                        </td>
                                         <td className="p-4 text-muted-foreground">{business.crm_type || 'N/A'}</td>
-                                        <td className="p-4 text-muted-foreground">{business.email || 'N/A'}</td>
-                                        <td className="p-4 text-muted-foreground">{business.phone || 'N/A'}</td>
                                         <td className="p-4 text-right">
-                                            <Button variant="outline" size="sm" className="mr-2">Manage</Button>
-                                            <Button size="sm">Impersonate</Button>
+                                            <Button variant="outline" size="sm" className="mr-2" onClick={() => window.location.href = `/clients?businessId=${business.id}`}>
+                                                Oversee
+                                            </Button>
+                                            <Button size="sm" variant="ghost">Details</Button>
                                         </td>
                                     </tr>
                                 ))}
@@ -302,7 +337,7 @@ function OnboardingTab() {
                                 <Input
                                     value={formData.businessName}
                                     onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                                    placeholder="e.g. Glow Med Spa"
+                                    placeholder="e.g. Scale with Jak"
                                 />
                             </div>
                             <div className="space-y-2">

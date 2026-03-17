@@ -13,8 +13,11 @@ interface FollowUpWithClient extends FollowUp {
     client_name: string;
 }
 
+const FALLBACK_BUSINESS_ID = 'ab445992-80fd-46d0-bec0-138a86e1d607';
+
 export default function FollowUpsPage() {
-    const { businessId, loading: authLoading } = useAuth();
+    const { businessId: authBusinessId, loading: authLoading } = useAuth();
+    const businessId = authBusinessId || FALLBACK_BUSINESS_ID;
     const [followUps, setFollowUps] = useState<FollowUpWithClient[]>([]);
     const [loading, setLoading] = useState(true);
     const [filters, setFilters] = useState({
@@ -25,10 +28,8 @@ export default function FollowUpsPage() {
     const [sortBy, setSortBy] = useState<'scheduled' | 'created'>('scheduled');
 
     useEffect(() => {
-        if (!authLoading && businessId) {
+        if (!authLoading) {
             loadFollowUps();
-        } else if (!authLoading && !businessId) {
-            setLoading(false);
         }
     }, [businessId, authLoading]);
 
@@ -142,7 +143,28 @@ export default function FollowUpsPage() {
     };
 
     async function sendFollowUp(followUpId: string) {
+        const fu = followUps.find(f => f.id === followUpId);
         try {
+            // If channel is SMS and client has a phone, actually send via Twilio
+            if (fu?.channel === 'sms' && fu?.clients) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const clientPhone = (fu.clients as any)?.phone;
+                if (clientPhone && fu.message_template) {
+                    await fetch('/api/messages/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            channel: 'sms',
+                            to: clientPhone,
+                            content: fu.message_template,
+                            clientId: fu.client_id,
+                            messageType: fu.type,
+                            businessId,
+                        }),
+                    });
+                }
+            }
+
             const { error } = await supabase
                 .from('follow_ups')
                 .update({
@@ -152,11 +174,11 @@ export default function FollowUpsPage() {
                 .eq('id', followUpId);
 
             if (error) throw error;
-            toast.success('Follow-up marked as sent');
+            toast.success(fu?.channel === 'sms' ? 'SMS sent successfully' : 'Follow-up marked as sent');
             loadFollowUps();
         } catch (error) {
             console.error('Error sending follow-up:', error);
-            toast.error('Failed to update follow-up');
+            toast.error('Failed to send follow-up');
         }
     }
 

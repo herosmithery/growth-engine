@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: any = {
   typescript: {
@@ -6,6 +7,11 @@ const nextConfig: any = {
   },
   eslint: {
     ignoreDuringBuilds: true,
+  },
+  experimental: {
+    turbo: {
+      root: path.resolve(__dirname),
+    },
   },
 };
 

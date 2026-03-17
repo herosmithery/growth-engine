@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import fs from 'fs';
+import path from 'path';
+
+const LOG_FILE = '/Users/johnkraeger/Downloads/growth engine/ai_agency/webhook_debug.log';
+
+function logToFile(msg: string) {
+  const timestamp = new Date().toISOString();
+  fs.appendFileSync(LOG_FILE, `[${timestamp}] ${msg}\n`);
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -7,6 +16,7 @@ const supabase = createClient(
 );
 
 import { getNicheConfig } from '@/lib/niches';
+import { BusinessConfig } from '@/lib/niches/universal-business-config';
 
 // VAPI Event Types - supports both direct type and message.type formats
 type VAPIEventType =
@@ -85,28 +95,62 @@ export async function POST(request: NextRequest) {
     // Find business by VAPI assistant ID or phone number
     let business = null;
 
-    // Try to find by phone number ID first (if column exists)
-    if (payload.call?.phoneNumberId) {
-      const { data: byPhoneId } = await supabase
+    // 1. Try to find by direct Assistant ID (most accurate for multi-tenant)
+    if (payload.message?.assistantId || (payload as any).assistantId) {
+      const assistantId = payload.message?.assistantId || (payload as any).assistantId;
+      logToFile(`Looking up business by Assistant ID: ${assistantId}`);
+      const { data: byAssistant, error: assistantError } = await supabase
         .from('businesses')
-        .select('id, name, vapi_phone_number, vapi_assistant_id, niche_type')
+        .select('id, name, vapi_assistant_id')
+        .eq('vapi_assistant_id', assistantId)
+        .limit(1);
+      
+      if (assistantError) {
+        logToFile(`Assistant lookup error: ${JSON.stringify(assistantError)}`);
+      }
+      if (byAssistant && byAssistant.length > 0) {
+        business = byAssistant[0];
+        logToFile(`Found business by Assistant ID: ${business.name} (${business.id})`);
+      }
+    }
+
+    // 2. Fallback: Try to find by phone number ID
+    if (!business && payload.call?.phoneNumberId) {
+      logToFile(`Fallback: Looking up by phone number ID: ${payload.call.phoneNumberId}`);
+      const { data: byPhoneId, error: phoneError } = await supabase
+        .from('businesses')
+        .select('id, name, vapi_phone_number, vapi_assistant_id')
         .eq('vapi_phone_number', '+1' + payload.call.phoneNumberId.replace(/\D/g, '').slice(-10))
-        .single();
-      business = byPhoneId;
+        .limit(1);
+      
+      if (phoneError) {
+        logToFile(`Phone lookup error: ${JSON.stringify(phoneError)}`);
+      }
+      if (byPhoneId && byPhoneId.length > 0) {
+        business = byPhoneId[0];
+        logToFile(`Found business by phone: ${business.name} (${business.id})`);
+      }
     }
 
-    // Fallback: find by assistant ID or get default business
+    // 3. Last Resort: Use first available business (Dev mode fallback)
     if (!business) {
-      const { data: defaultBusiness } = await supabase
+      logToFile('Last Resort: Fallback to first business in DB');
+      const { data: defaultBusiness, error: defaultError } = await supabase
         .from('businesses')
-        .select('id, name, vapi_phone_number, vapi_assistant_id, niche_type')
-        .not('vapi_assistant_id', 'is', null)
-        .limit(1)
-        .single();
-      business = defaultBusiness;
+        .select('id, name, vapi_phone_number, vapi_assistant_id')
+        .limit(1);
+      
+      if (defaultError) {
+        logToFile(`Default business error: ${JSON.stringify(defaultError)}`);
+      }
+      if (defaultBusiness && defaultBusiness.length > 0) {
+        business = defaultBusiness[0];
+        logToFile(`Found default business: ${business.name} (${business.id})`);
+      }
     }
 
-    const businessId = business?.id || await getDefaultBusinessId();
+    const businessId = business?.id;
+    logToFile(`Final Business ID: ${businessId}`);
 
     switch (eventType) {
       case 'call-start':
@@ -269,6 +313,8 @@ async function handleCallEnd(payload: VAPIWebhookPayload, businessId: string, bu
     timestamp: m.time ? new Date(m.time).toISOString() : null,
   })) : (payload.transcript ? [{ role: 'transcript', message: payload.transcript }] : null);
 
+  logToFile(`[VAPI] handleCallEnd for ${call.id} | Outcome: ${outcome}`);
+
   // Update call log
   const { error } = await supabase
     .from('call_logs')
@@ -284,22 +330,24 @@ async function handleCallEnd(payload: VAPIWebhookPayload, businessId: string, bu
     .eq('vapi_call_id', call.id);
 
   if (error) {
-    console.error('[VAPI] Failed to update call log:', error);
+    logToFile(`[VAPI] Failed to update call log: ${JSON.stringify(error)}`);
   } else {
-    console.log(`[VAPI] Call ended: ${call.id} | Duration: ${durationSeconds}s | Outcome: ${outcome}`);
+    logToFile(`[VAPI] Call log updated successfully: ${call.id}`);
   }
 
   // If appointment was booked but no appointment exists yet, create one
   if (outcome === 'booked') {
     // Check if appointment already created via function call
-    const { data: callLog } = await supabase
+    const { data: callLog, error: logFetchError } = await supabase
       .from('call_logs')
       .select('appointment_id, client_id')
       .eq('vapi_call_id', call.id)
       .single();
 
+    if (logFetchError) logToFile(`[VAPI] Call log fetch error: ${JSON.stringify(logFetchError)}`);
+
     if (!callLog?.appointment_id) {
-      console.log('[VAPI] Creating appointment for booked call (no function-call received)');
+      logToFile('[VAPI] Creating appointment for booked call (no function-call received)');
       await createAppointmentFromCall(call.id, callerPhone, businessId, summary);
     }
 
@@ -563,19 +611,25 @@ function determineOutcome(summary: string, duration: number, endReason?: string)
 }
 
 async function createAppointmentFromCall(callId: string, callerPhone: string, businessId: string, summary: string) {
+  logToFile(`[VAPI] createAppointmentFromCall for ${callId} | Phone: ${callerPhone}`);
   // Find or create client
   let clientId: string;
-  const { data: existingClient } = await supabase
+  const { data: existingClient, error: clientFetchError } = await supabase
     .from('clients')
     .select('id, first_name')
     .eq('phone', callerPhone)
     .single();
 
+  if (clientFetchError && clientFetchError.code !== 'PGRST116') {
+     logToFile(`[VAPI] Client lookup error: ${JSON.stringify(clientFetchError)}`);
+  }
+
   if (existingClient) {
     clientId = existingClient.id;
-    console.log(`[VAPI] Found existing client: ${existingClient.first_name}`);
+    logToFile(`[VAPI] Found existing client: ${existingClient.first_name}`);
   } else {
     // Create new client from caller phone
+    logToFile(`[VAPI] Creating new client for phone: ${callerPhone}`);
     const { data: newClient, error } = await supabase
       .from('clients')
       .insert({
@@ -584,17 +638,16 @@ async function createAppointmentFromCall(callId: string, callerPhone: string, bu
         last_name: 'Caller',
         phone: callerPhone,
         status: 'active',
-        source: 'ai_phone',
       })
       .select('id')
       .single();
 
     if (error || !newClient) {
-      console.error('[VAPI] Failed to create client:', error);
+      logToFile(`[VAPI] Failed to create client: ${JSON.stringify(error)}`);
       return;
     }
     clientId = newClient.id;
-    console.log(`[VAPI] Created new client: ${clientId}`);
+    logToFile(`[VAPI] Created new client: ${clientId}`);
   }
 
   // Parse treatment type from summary if possible
@@ -643,14 +696,20 @@ async function createAppointmentFromCall(callId: string, callerPhone: string, bu
 }
 
 async function createBookingFollowUp(callId: string, businessId: string, businessName?: string, nicheType?: string) {
+  logToFile(`[VAPI] createBookingFollowUp for call ${callId} | Niche: ${nicheType}`);
   // Get the call details
-  const { data: call } = await supabase
+  const { data: call, error: callError } = await supabase
     .from('call_logs')
     .select('client_id, appointment_id')
     .eq('vapi_call_id', callId)
     .single();
 
-  if (!call?.client_id || !call?.appointment_id) return;
+  if (callError) logToFile(`[VAPI] Follow-up call lookup error: ${JSON.stringify(callError)}`);
+
+  if (!call?.client_id || !call?.appointment_id) {
+    logToFile('[VAPI] Follow-up skipped: Missing client_id or appointment_id');
+    return;
+  }
 
   const nicheConfig = getNicheConfig(nicheType);
   const messageContent = nicheConfig.smsFollowUp.bookingConfirmation.replace('[Business Name]', businessName || 'our office');
@@ -668,9 +727,9 @@ async function createBookingFollowUp(callId: string, businessId: string, busines
   });
 
   if (followUpError) {
-    console.error('[VAPI] Failed to create follow-up:', followUpError);
+    logToFile(`[VAPI] Failed to create follow-up: ${JSON.stringify(followUpError)}`);
   } else {
-    console.log('[VAPI] Created booking confirmation follow-up');
+    logToFile('[VAPI] Created booking confirmation follow-up');
   }
 }
 

@@ -156,12 +156,12 @@ export default function SignupPage() {
         <div className="flex min-h-screen items-center justify-center p-4">
             <Card className="w-full max-w-md">
                 <CardHeader className="text-center">
-                    <div className="mx-auto mb-4 w-12 h-12 bg-gradient-to-br from-primary to-blue-600 rounded-lg flex items-center justify-center">
-                        <span className="text-white font-bold text-lg">MS</span>
+                    <div className="mx-auto mb-4 w-12 h-12 bg-gray-900 dark:bg-white rounded-lg flex items-center justify-center">
+                        <span className="text-white dark:text-gray-900 font-bold text-lg">SJ</span>
                     </div>
                     <CardTitle className="text-2xl">Create your account</CardTitle>
                     <CardDescription>
-                        Start your Growth Engine - it's free!
+                        Start your Growth Engine by Scale with Jak - it&apos;s free!
                     </CardDescription>
                 </CardHeader>
                 <CardContent>

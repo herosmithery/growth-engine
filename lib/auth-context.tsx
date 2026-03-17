@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // First check if user has a business linked via user_businesses junction table
             const { data: userBusiness, error: junctionError } = await supabase
                 .from('user_businesses')
-                .select('business_id, businesses(id, name, niche_type)')
+                .select('business_id, businesses(id, name)')
                 .eq('user_id', userId)
                 .single();
 
@@ -107,14 +107,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Fallback: check businesses table directly if owner_id matches
             const { data: ownedBusiness, error: ownerError } = await supabase
                 .from('businesses')
-                .select('id, name, niche_type')
+                .select('id, name')
                 .eq('owner_id', userId)
                 .single();
 
             if (!ownerError && ownedBusiness) {
                 setBusinessId(ownedBusiness.id);
                 setBusinessName(ownedBusiness.name);
-                setNiche(ownedBusiness.niche_type || 'general');
+                setNiche('general');
                 return;
             }
 

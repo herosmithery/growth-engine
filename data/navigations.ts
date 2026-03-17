@@ -32,6 +32,14 @@ export const navigationsData: NavigationType[] = [
     ],
   },
   {
+    title: "Operations",
+    items: [
+      { title: "Dispatch", href: "/dispatch", iconName: "MapPin" },
+      { title: "Inventory", href: "/inventory", iconName: "Package" },
+      { title: "Field Reports", href: "/field-reports", iconName: "ClipboardList" },
+    ],
+  },
+  {
     title: "System",
     items: [
       { title: "Webhooks", href: "/webhooks", iconName: "Webhook" },

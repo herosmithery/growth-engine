@@ -125,7 +125,7 @@ export function Sidebar() {
           </div>
           <div className="flex flex-col">
             <span>Growth Engine</span>
-            <span className="text-xs font-normal text-muted-foreground">{businessName || 'My Clinic'}</span>
+            <span className="text-xs font-normal text-muted-foreground">by Scale with Jak</span>
           </div>
         </Link>
         <CommandMenu buttonClassName="max-w-full" />

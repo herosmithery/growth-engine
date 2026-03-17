@@ -60,7 +60,7 @@ async function createAccounts() {
     user_metadata: {
       role: 'owner',
       full_name: 'Demo Owner',
-      business_name: 'Glow Med Spa',
+      business_name: 'Scale with Jak',
       business_id: 'ab445992-80fd-46d0-bec0-138a86e1d607'
     }
   });
@@ -76,7 +76,7 @@ async function createAccounts() {
           user_metadata: {
             role: 'owner',
             full_name: 'Demo Owner',
-            business_name: 'Glow Med Spa',
+            business_name: 'Scale with Jak',
             business_id: 'ab445992-80fd-46d0-bec0-138a86e1d607'
           }
         });

@@ -16,8 +16,11 @@ interface CampaignWithMetrics extends Campaign {
     };
 }
 
+const FALLBACK_BUSINESS_ID = 'ab445992-80fd-46d0-bec0-138a86e1d607';
+
 export default function CampaignsPage() {
-    const { businessId, loading: authLoading } = useAuth();
+    const { businessId: authBusinessId, loading: authLoading } = useAuth();
+    const businessId = authBusinessId || FALLBACK_BUSINESS_ID;
     const [campaigns, setCampaigns] = useState<CampaignWithMetrics[]>([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
@@ -34,10 +37,8 @@ export default function CampaignsPage() {
     });
 
     useEffect(() => {
-        if (!authLoading && businessId) {
+        if (!authLoading) {
             loadCampaigns();
-        } else if (!authLoading && !businessId) {
-            setLoading(false);
         }
     }, [businessId, authLoading]);
 
@@ -102,14 +103,15 @@ export default function CampaignsPage() {
                 targetCount = count || 0;
             }
 
-            // Create the campaign
-            const { error } = await supabase
+            // Create the campaign and set to active immediately
+            const { data: campaignData, error } = await supabase
                 .from('campaigns')
                 .insert({
                     business_id: businessId,
                     name: newCampaign.name,
                     type: newCampaign.type,
-                    status: 'draft',
+                    status: 'active',
+                    channel: 'sms',
                     message_template: messageTemplate,
                     target_count: targetCount,
                     target_criteria: newCampaign.type === 'reactivation'
@@ -117,11 +119,53 @@ export default function CampaignsPage() {
                         : null,
                     sent_count: 0,
                     replied_count: 0,
-                });
+                    started_at: new Date().toISOString(),
+                })
+                .select()
+                .single();
 
             if (error) throw error;
 
-            toast.success(`Campaign "${newCampaign.name}" created with ${targetCount} targets`);
+            // If reactivation, fetch lapsed clients and fire SMS via /api/messages/send
+            if (newCampaign.type === 'reactivation' && campaignData) {
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - newCampaign.minDaysSinceVisit);
+                const { data: lapsedClients } = await supabase
+                    .from('clients')
+                    .select('id, first_name, phone')
+                    .eq('business_id', businessId)
+                    .not('phone', 'is', null)
+                    .lt('last_visit_at', cutoffDate.toISOString())
+                    .limit(50);
+
+                let sent = 0;
+                for (const client of (lapsedClients || [])) {
+                    if (!client.phone) continue;
+                    const msg = messageTemplate
+                        .replace('{firstName}', client.first_name || 'there')
+                        .replace('{name}', client.first_name || 'there');
+                    try {
+                        await fetch('/api/messages/send', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                channel: 'sms',
+                                to: client.phone,
+                                content: msg,
+                                clientId: client.id,
+                                messageType: 'reactivation',
+                                businessId,
+                            }),
+                        });
+                        sent++;
+                    } catch { /* continue on individual failure */ }
+                }
+                // Update sent count
+                await supabase.from('campaigns').update({ sent_count: sent }).eq('id', campaignData.id);
+                toast.success(`Campaign launched — ${sent} SMS messages sent`);
+            } else {
+                toast.success(`Campaign "${newCampaign.name}" created and active`);
+            }
             setShowCreateModal(false);
             setNewCampaign({ name: '', type: 'reactivation', minDaysSinceVisit: 60, offerText: '', treatmentType: '', occasion: '', messageTemplate: '' });
             loadCampaigns();

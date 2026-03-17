@@ -100,7 +100,7 @@ async function run() {
             direction: isOutbound ? 'outbound' : 'inbound',
             message_type: isOutbound ? type : 'reply',
             content: isOutbound
-                ? `Hi ${client.first_name}, this is Glow Med Spa with an update regarding your ${randomEl(treatments)} interest.`
+                ? `Hi ${client.first_name}, this is Scale with Jak with an update regarding your ${randomEl(treatments)} interest.`
                 : `Thank you! I will be there for my appointment.`,
             status: 'delivered',
             sent_at: randomDate(past30, now)

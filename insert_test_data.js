@@ -35,7 +35,7 @@ async function main() {
       direction: 'outbound',
       message_type: 'reactivation',
       to_number: '+15551234567',
-      content: "Hi Sarah! It's been a while since we've seen you at Glow Med Spa. We miss you! Enjoy 15% off your next treatment. Reply YES to book!",
+      content: "Hi Sarah! It's been a while since we've seen you at Scale with Jak. We miss you! Enjoy 15% off your next treatment. Reply YES to book!",
       status: 'sent',
       sent_at: new Date(Date.now() - 2*60*60*1000).toISOString()
     },
@@ -56,7 +56,7 @@ async function main() {
       direction: 'outbound',
       message_type: 'confirmation',
       to_number: '+15551112222',
-      content: 'Hi Emily! This is a reminder for your Botox appointment tomorrow at 2:00 PM at Glow Med Spa. Reply C to confirm or R to reschedule.',
+      content: 'Hi Emily! This is a reminder for your Botox appointment tomorrow at 2:00 PM at Scale with Jak. Reply C to confirm or R to reschedule.',
       status: 'delivered',
       sent_at: new Date(Date.now() - 30*60*1000).toISOString(),
       delivered_at: new Date(Date.now() - 29*60*1000).toISOString()

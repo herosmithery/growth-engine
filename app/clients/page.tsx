@@ -39,8 +39,11 @@ interface ClientDetail extends ClientWithStatus {
     }>;
 }
 
+const FALLBACK_BUSINESS_ID = 'ab445992-80fd-46d0-bec0-138a86e1d607';
+
 export default function ClientsPage() {
-    const { businessId, loading: authLoading } = useAuth();
+    const { businessId: authBusinessId, isAdmin, loading: authLoading } = useAuth();
+    const [businessId, setBusinessId] = useState<string | null>(null);
     const [clients, setClients] = useState<ClientWithStatus[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedClient, setSelectedClient] = useState<ClientDetail | null>(null);
@@ -54,12 +57,23 @@ export default function ClientsPage() {
     const [showMessageInput, setShowMessageInput] = useState(false);
 
     useEffect(() => {
-        if (!authLoading && businessId) {
-            loadClients();
-        } else if (!authLoading && !businessId) {
-            setLoading(false);
+        if (!authLoading) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const queryBusinessId = urlParams.get('businessId');
+
+            if (isAdmin && queryBusinessId) {
+                setBusinessId(queryBusinessId);
+            } else {
+                setBusinessId(authBusinessId || FALLBACK_BUSINESS_ID);
+            }
         }
-    }, [businessId, authLoading]);
+    }, [authLoading, authBusinessId, isAdmin]);
+
+    useEffect(() => {
+        if (businessId) {
+            loadClients();
+        }
+    }, [businessId]);
 
     function getClientStatus(lastVisit: string | null | undefined): 'active' | 'at_risk' | 'lapsed' {
         if (!lastVisit) return 'lapsed';
@@ -139,9 +153,9 @@ export default function ClientsPage() {
                 ...client,
                 appointments: (appointments || []).map(apt => ({
                     id: apt.id,
-                    date: apt.appointment_date,
-                    treatment: apt.treatment_name,
-                    amount: apt.price || 0,
+                    date: apt.start_time,
+                    treatment: apt.treatment_type,
+                    amount: apt.amount || 0,
                     status: apt.status,
                 })),
                 messages: (messages || []).map(msg => ({
@@ -177,31 +191,32 @@ export default function ClientsPage() {
 
         setSending(true);
         try {
-            const { error } = await supabase
-                .from('messages')
-                .insert({
-                    business_id: businessId,
-                    client_id: clientId,
+            // Send via Twilio + log to Supabase
+            const res = await fetch('/api/messages/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     channel: 'sms',
-                    direction: 'outbound',
+                    to: phone,
                     content: messageText,
-                    to_number: phone,
-                    status: 'pending',
-                });
+                    clientId,
+                    messageType: 'nurture',
+                    businessId,
+                }),
+            });
 
-            if (error) throw error;
+            if (!res.ok) throw new Error(await res.text());
 
-            toast.success('Message queued for sending');
+            toast.success('SMS sent successfully');
             setMessageText('');
             setShowMessageInput(false);
 
-            // Reload client detail to show new message
             if (selectedClient) {
                 loadClientDetail(selectedClient.id);
             }
         } catch (error) {
             console.error('Error sending message:', error);
-            toast.error('Failed to send message');
+            toast.error('Failed to send SMS');
         } finally {
             setSending(false);
         }

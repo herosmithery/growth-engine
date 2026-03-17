@@ -52,7 +52,7 @@ async function main() {
       status: 'active',
       channel: 'sms',
       target_criteria: { days_inactive: 60, max_contacts: 50 },
-      message_template: "Hi {first_name}! It's been a while since we've seen you at Glow Med Spa. We miss you! Enjoy 15% off your next treatment. Reply YES to book!",
+      message_template: "Hi {first_name}! It's been a while since we've seen you at Scale with Jak. We miss you! Enjoy 15% off your next treatment. Reply YES to book!",
       scheduled_at: new Date().toISOString(),
     }, { onConflict: 'name' })
     .select();
@@ -74,7 +74,7 @@ async function main() {
       status: 'active',
       channel: 'sms',
       target_criteria: { post_appointment: true, delay_hours: 24 },
-      message_template: "Hi {first_name}! Thank you for visiting Glow Med Spa today. We hope you loved your treatment! Would you take 30 seconds to leave us a review? {review_link}",
+      message_template: "Hi {first_name}! Thank you for visiting Scale with Jak today. We hope you loved your treatment! Would you take 30 seconds to leave us a review? {review_link}",
       scheduled_at: new Date().toISOString(),
     }, { onConflict: 'name' })
     .select();
@@ -101,7 +101,7 @@ async function main() {
       direction: 'outbound',
       message_type: 'reactivation',
       to_number: msg.to,
-      content: `Hi ${msg.name}! It's been a while since we've seen you at Glow Med Spa. We miss you! Enjoy 15% off your next treatment. Reply YES to book!`,
+      content: `Hi ${msg.name}! It's been a while since we've seen you at Scale with Jak. We miss you! Enjoy 15% off your next treatment. Reply YES to book!`,
       status: msg.status,
       sent_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
     });
@@ -136,7 +136,7 @@ async function main() {
       direction: 'outbound',
       message_type: 'review_request',
       to_number: msg.to,
-      content: `Hi ${msg.name}! Thank you for your ${msg.treatment} today at Glow Med Spa. We hope you loved it! Would you take 30 seconds to leave us a review? https://g.page/r/glow-med-spa`,
+      content: `Hi ${msg.name}! Thank you for your ${msg.treatment} today at Scale with Jak. We hope you loved it! Would you take 30 seconds to leave us a review? https://g.page/r/glow-med-spa`,
       status: msg.status,
       sent_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
     });

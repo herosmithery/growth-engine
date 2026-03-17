@@ -11,7 +11,7 @@ async function main() {
     .from('businesses')
     .update({
       vapi_phone_number: 'ce33d019-a0a3-40c5-a850-c473815bd2ed',
-      name: 'Glow Med Spa'
+      name: 'Scale with Jak'
     })
     .eq('id', 'ab445992-80fd-46d0-bec0-138a86e1d607')
     .select();
