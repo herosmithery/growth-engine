@@ -1,0 +1,41 @@
+# HTTP / API framework
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.6.0
+
+# Existing Flask server (webhook_server.py)
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# AI / LLM
+openai>=1.30.0
+google-generativeai>=0.5.0
+
+# Web scraping / search
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+firecrawl-py>=0.0.16
+googlesearch-python>=1.2.3
+
+# Env / config
+python-dotenv>=1.0.0
+
+# Database
+supabase>=2.4.0
+
+# Payments
+stripe>=9.0.0
+
+# Messaging
+twilio>=9.0.0
+python-telegram-bot>=21.0.0
+resend>=2.0.0
+
+# Image processing
+Pillow>=10.3.0
+
+# Browser automation
+playwright>=1.44.0
+
+# Standard lib extras (usually included, listed for clarity)
+# asyncio, imaplib, smtplib, email, threading, subprocess — stdlib, no install needed

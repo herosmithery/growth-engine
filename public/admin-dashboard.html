@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Growth Engine — Master Admin Portal</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #08080f; color: #fff; margin: 0; }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulseGlow { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useEffect } = React;
+
+function PulsingDot({ color }) {
+  return (
+    <span style={{ position: "relative", display: "inline-block", width: 8, height: 8 }}>
+      <span style={{
+        position: "absolute", inset: 0, borderRadius: "50%",
+        background: color, animation: "ping 1.5s ease-in-out infinite", opacity: 0.4
+      }} />
+      <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: color }} />
+    </span>
+  );
+}
+
+function StatCard({ label, value, sub, color, icon }) {
+  return (
+    <div style={{
+      background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)",
+      borderRadius: 12, padding: "20px 24px", flex: 1, minWidth: 140,
+      position: "relative", overflow: "hidden"
+    }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${color}, transparent)` }} />
+      <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
+      <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Space Mono', monospace", color }}>{value}</div>
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>{label}</div>
+      {sub && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function MasterAdmin() {
+  const [clients, setClients] = useState([]);
+  const [totalMRR, setTotalMRR] = useState(0);
+  const [activities, setActivities] = useState([]);
+  const [activeTab, setActiveTab] = useState("roster");
+
+  // Fetch Data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch Clients
+        const clientsRes = await fetch("http://127.0.0.1:4242/api/clients");
+        if (clientsRes.ok) {
+          const cData = await clientsRes.json();
+          setClients(cData.clients || []);
+          setTotalMRR(cData.total_mrr || 0);
+        }
+
+        // Fetch Global Activities (Call logs, Bookings, System Events)
+        const actRes = await fetch("http://127.0.0.1:4242/api/activities");
+        if (actRes.ok) {
+          setActivities(await actRes.json());
+        }
+      } catch (err) {
+        console.error("Error fetching admin data:", err);
+      }
+    };
+    
+    fetchData();
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div style={{ display: "flex", minHeight: "100vh" }}>
+      {/* Sidebar */}
+      <div style={{
+        width: 260, background: "rgba(255, 255, 255, 0.02)", borderRight: "1px solid rgba(255,255,255,0.05)",
+        padding: "30px 20px", display: "flex", flexDirection: "column"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 40 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #a855f7, #6366f1)",
+            display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold"
+          }}>J</div>
+          <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>ScaleWithJak</div>
+        </div>
+
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>Admin Portal</div>
+        
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {[
+            { id: "roster", icon: "🏢", label: "Client Roster" },
+            { id: "feed", icon: "⚡️", label: "Global Activity Feed" }
+          ].map(item => (
+            <button key={item.id} onClick={() => setActiveTab(item.id)}
+              style={{
+                display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
+                background: activeTab === item.id ? "rgba(255,255,255,0.08)" : "transparent",
+                color: activeTab === item.id ? "#fff" : "rgba(255,255,255,0.6)",
+                border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left", fontSize: 14, fontWeight: 500,
+                transition: "all 0.2s"
+              }}>
+              <span style={{ fontSize: 16 }}>{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div style={{ flex: 1, padding: "40px 60px", overflowY: "auto" }}>
+        
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
+          <div>
+            <h1 style={{ margin: "0 0 6px 0", fontSize: 28, fontWeight: 700 }}>God View Overview</h1>
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.5)" }}>Manage infrastructure and monitor network activity.</p>
+          </div>
+          <button style={{
+            background: "#fff", color: "#000", border: "none", padding: "10px 20px",
+            borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 8
+          }}>
+            <span>🚀</span> Provision New Client
+          </button>
+        </div>
+
+        {/* Global Stats */}
+        <div style={{ display: "flex", gap: 20, marginBottom: 40 }}>
+          <StatCard label="Total MRR" value={`$${totalMRR.toLocaleString()}`} color="#10b981" icon="💰" sub="Monthly Recurring Revenue" />
+          <StatCard label="Active Accounts" value={clients.length} color="#6366f1" icon="🏢" sub="Live on Growth Engine" />
+          <StatCard label="System Status" value="ALL NOMINAL" color="#a855f7" icon="🟢" sub="Webhooks & Agents Alive" />
+        </div>
+
+        {/* Client Roster Tab */}
+        {activeTab === "roster" && (
+          <div style={{ animation: "slideIn 0.2s ease-out" }}>
+            <h3 style={{ fontSize: 16, color: "rgba(255,255,255,0.8)", marginBottom: 16, borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 10 }}>Deployed Accounts</h3>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, textAlign: "left", textTransform: "uppercase", letterSpacing: 1 }}>
+                  <th style={{ padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>Business</th>
+                  <th style={{ padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>Vertical</th>
+                  <th style={{ padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>Tier</th>
+                  <th style={{ padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>MRR</th>
+                  <th style={{ padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", textAlign: "center" }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clients.length === 0 && (
+                  <tr><td colSpan="5" style={{ padding: "30px 0", textAlign: "center", color: "rgba(255,255,255,0.3)" }}>No clients provisioned yet.</td></tr>
+                )}
+                {clients.map((client, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                    <td style={{ padding: "16px 0", fontWeight: 500 }}>{client.business_name}</td>
+                    <td style={{ padding: "16px 0", color: "rgba(255,255,255,0.6)", textTransform: "capitalize" }}>{client.vertical}</td>
+                    <td style={{ padding: "16px 0", color: "rgba(255,255,255,0.6)", textTransform: "capitalize" }}>
+                      <span style={{ 
+                        background: client.tier === "custom" ? "rgba(168,85,247,0.2)" : "rgba(99,102,241,0.2)", 
+                        color: client.tier === "custom" ? "#a855f7" : "#6366f1", 
+                        padding: "4px 8px", borderRadius: 4, fontSize: 11 
+                      }}>
+                        {client.tier}
+                      </span>
+                    </td>
+                    <td style={{ padding: "16px 0", fontFamily: "'Space Mono', monospace" }}>${client.monthly_rate}</td>
+                    <td style={{ padding: "16px 0", textAlign: "center" }}>
+                      {client.active ? <PulsingDot color="#10b981" /> : <div style={{width: 8, height: 8, background: "#ef4444", borderRadius: "50%", display: "inline-block"}} />}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Global Activity Tab */}
+        {activeTab === "feed" && (
+          <div style={{ maxWidth: 800, animation: "slideIn 0.2s ease-out" }}>
+            <h3 style={{ fontSize: 16, color: "rgba(255,255,255,0.8)", marginBottom: 16, borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 10 }}>Network Wide Activity</h3>
+            {activities.length === 0 && <div style={{ color: "rgba(255,255,255,0.4)", padding: "20px 0" }}>No network activity recorded.</div>}
+            
+            {activities.map((item, i) => (
+              <div key={i} style={{
+                display: "flex", gap: 16, padding: "16px 0",
+                borderBottom: "1px solid rgba(255,255,255,0.05)",
+              }}>
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: `${item.color || '#a855f7'}18`, border: `1px solid ${item.color || '#a855f7'}30`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: item.color || '#a855f7' }}>{item.agent ? item.agent[0] : 'S'}</span>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: item.color || '#a855f7' }}>{item.agent || 'System'}</span>
+                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)" }}>·</span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontFamily: "'Space Mono', monospace" }}>{item.time}</span>
+                  </div>
+                  <div style={{ fontSize: 14, color: "rgba(255,255,255,0.8)", lineHeight: 1.5 }}>{item.msg}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<MasterAdmin />);
+  </script>
+</body>
+</html>

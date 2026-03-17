@@ -1,0 +1,14 @@
+[build]
+
+[deploy]
+startCommand = "cd ai_agency && python3 webhook_server.py"
+healthcheckPath = "/api/clients"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[[services]]
+name = "growth-engine-api"
+
+[services.variables]
+PORT = "4242"

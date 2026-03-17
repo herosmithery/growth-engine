@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agency Dashboard OS - LIVE</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body style="margin: 0; padding: 0; background: #08080f;">
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const NICHES = ["Med Spas", "Veterinary Clinics"];
+
+// We will load leads dynamically from the Python API instead
+const INITIAL_LEADS = [];
+
+const PIPELINE_STAGES = [
+  { key: "scouted", label: "Scouted", color: "#6366f1", bg: "rgba(99,102,241,0.12)", icon: "🔍" },
+  { key: "hot", label: "Hot Lead", color: "#f43f5e", bg: "rgba(244,63,94,0.12)", icon: "🔥" },
+  { key: "outreach", label: "In Outreach", color: "#f59e0b", bg: "rgba(245,158,11,0.12)", icon: "📨" },
+  { key: "reply", label: "Replied", color: "#10b981", bg: "rgba(16,185,129,0.12)", icon: "💬" },
+  { key: "demo_sent", label: "Demo Sent", color: "#3b82f6", bg: "rgba(59,130,246,0.12)", icon: "🎨" },
+  { key: "closed", label: "Closed", color: "#a855f7", bg: "rgba(168,85,247,0.12)", icon: "✅" },
+];
+
+const AGENTS = [
+  { id: "scout", name: "Scout Agent", icon: "🔍", status: "running", task: "Scanning Google Maps — Med Spas in Phoenix, AZ", processed: 847, found: 34, color: "#6366f1" },
+  { id: "outreach", name: "Outreach Agent", icon: "📨", status: "running", task: "Sending Email 2 to Bloom Aesthetic Center", processed: 312, found: 18, color: "#f59e0b" },
+  { id: "design", name: "Design Agent", icon: "🎨", status: "idle", task: "Waiting for hot leads…", processed: 56, found: 12, color: "#3b82f6" },
+  { id: "close", name: "Close Agent", icon: "🤝", status: "running", task: "Handling reply from Serenity Vet Clinic", processed: 89, found: 7, color: "#10b981" },
+  { id: "success", name: "Client Success", icon: "💼", status: "running", task: "Onboarding Luxe Skin Studio via email", processed: 23, found: 5, color: "#a855f7" },
+];
+
+const scoreColor = (score) => {
+  if (score < 20) return "#f43f5e";
+  if (score < 40) return "#f59e0b";
+  return "#10b981";
+};
+
+const stageInfo = (key) => PIPELINE_STAGES.find(s => s.key === key) || PIPELINE_STAGES[0];
+
+function PulsingDot({ color }) {
+  return (
+    <span style={{ position: "relative", display: "inline-block", width: 8, height: 8 }}>
+      <span style={{
+        position: "absolute", inset: 0, borderRadius: "50%",
+        background: color, animation: "ping 1.5s ease-in-out infinite", opacity: 0.4
+      }} />
+      <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: color }} />
+    </span>
+  );
+}
+
+function StatCard({ label, value, sub, color, icon }) {
+  return (
+    <div style={{
+      background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)",
+      borderRadius: 12, padding: "20px 24px", flex: 1, minWidth: 140,
+      position: "relative", overflow: "hidden"
+    }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${color}, transparent)` }} />
+      <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
+      <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Space Mono', monospace", color }}>{value}</div>
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>{label}</div>
+      {sub && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function AgentCard({ agent }) {
+  return (
+    <div style={{
+      background: "rgba(255,255,255,0.03)", border: `1px solid ${agent.status === "running" ? agent.color + "40" : "rgba(255,255,255,0.07)"}`,
+      borderRadius: 12, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 20 }}>{agent.icon}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.9)" }}>{agent.name}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+            <PulsingDot color={agent.status === "running" ? agent.color : "#555"} />
+            <span style={{ fontSize: 10, color: agent.status === "running" ? agent.color : "#555", textTransform: "uppercase", letterSpacing: 1 }}>
+              {agent.status}
+            </span>
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Space Mono', monospace", color: agent.color }}>{agent.found}</div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>leads</div>
+        </div>
+      </div>
+      <div style={{
+        fontSize: 11, color: "rgba(255,255,255,0.4)", fontStyle: "italic",
+        borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 8
+      }}>
+        {agent.task}
+      </div>
+    </div>
+  );
+}
+
+function LeadCard({ lead, onClick, selected }) {
+  const stage = stageInfo(lead.status);
+  return (
+    <div onClick={() => onClick(lead)} style={{
+      background: selected ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.025)",
+      border: `1px solid ${selected ? stage.color + "80" : "rgba(255,255,255,0.07)"}`,
+      borderRadius: 10, padding: "14px 16px", cursor: "pointer",
+      transition: "all 0.15s", marginBottom: 8
+    }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.9)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {lead.business}
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{lead.location}</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 700, fontFamily: "'Space Mono', monospace",
+            color: scoreColor(lead.score),
+            background: `${scoreColor(lead.score)}18`,
+            border: `1px solid ${scoreColor(lead.score)}40`,
+            borderRadius: 4, padding: "2px 6px"
+          }}>{lead.score}/100</div>
+          <div style={{
+            fontSize: 9, background: stage.bg, color: stage.color,
+            border: `1px solid ${stage.color}40`, borderRadius: 4, padding: "2px 6px",
+            textTransform: "uppercase", letterSpacing: 0.5
+          }}>{stage.icon} {stage.label}</div>
+        </div>
+      </div>
+      <div style={{ marginTop: 8, fontSize: 10, color: "rgba(255,255,255,0.3)", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 6 }}>
+        → {lead.nextAction}
+      </div>
+    </div>
+  );
+}
+
+function LeadDetail({ lead, onClose, onOpenPreview }) {
+  const stage = stageInfo(lead.status);
+  const stageIdx = PIPELINE_STAGES.findIndex(s => s.key === lead.status);
+
+  return (
+    <div style={{
+      background: "#0d0d14", border: "1px solid rgba(255,255,255,0.1)",
+      borderRadius: 14, padding: 24, display: "flex", flexDirection: "column", gap: 16
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>{lead.business}</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{lead.niche} · {lead.location}</div>
+        </div>
+        <button onClick={onClose} style={{
+          background: "rgba(255,255,255,0.07)", border: "none", color: "rgba(255,255,255,0.5)",
+          borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 13
+        }}>✕</button>
+      </div>
+
+      {/* Pipeline progress */}
+      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+        {PIPELINE_STAGES.map((s, i) => (
+          <div key={s.key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            <div style={{
+              height: 4, width: "100%", borderRadius: 2,
+              background: i <= stageIdx ? s.color : "rgba(255,255,255,0.08)",
+              transition: "background 0.3s"
+            }} />
+            {i === stageIdx && (
+              <div style={{ fontSize: 9, color: s.color, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Metrics */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {[
+          ["Website", lead.website],
+          ["Email", lead.email],
+          ["Phone", lead.phone],
+          ["Est. Revenue", lead.revenue],
+          ["PageSpeed", `${lead.pageSpeed}/100`],
+          ["Mobile", lead.mobile ? "✅ Yes" : "❌ No"],
+          ["SSL", lead.ssl ? "✅ Secure" : "⚠️ None"],
+          ["Site Score", `${lead.score}/100`],
+        ].map(([k, v]) => (
+          <div key={k} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "10px 12px" }}>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>{k}</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", fontFamily: k === "PageSpeed" || k === "Site Score" ? "'Space Mono', monospace" : "inherit" }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Actions */}
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Agent Actions</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[
+            {
+              label: "Generate Demo", color: "#3b82f6", disabled: false, onClick: () => {
+                fetch("http://127.0.0.1:4242/api/action/demo", {
+                  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lead_id: lead.id })
+                }).then(r => r.json()).then(d => alert("🎨 " + d.message));
+              }
+            },
+            { label: lead.demoReady ? "View AI Outputs" : "Outputs Not Ready", color: "#f59e0b", disabled: !lead.demoReady, onClick: () => onOpenPreview(lead) },
+            { label: "Send Full Demo", color: "#10b981", disabled: false, onClick: () => alert("Demo sent via Instantly!") },
+            {
+              label: "Send Invoice", color: "#a855f7", disabled: false, onClick: () => {
+                fetch("http://127.0.0.1:4242/api/action/invoice", {
+                  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lead_id: lead.id, amount: 2500 })
+                }).then(r => r.json()).then(d => alert("✅ " + d.message));
+              }
+            },
+          ].map(btn => (
+            <button key={btn.label} onClick={btn.onClick} disabled={btn.disabled} style={{
+              background: btn.disabled ? "rgba(255,255,255,0.03)" : `${btn.color}18`,
+              border: `1px solid ${btn.disabled ? "rgba(255,255,255,0.06)" : btn.color + "50"}`,
+              color: btn.disabled ? "rgba(255,255,255,0.2)" : btn.color,
+              borderRadius: 7, padding: "7px 12px", fontSize: 11, cursor: btn.disabled ? "not-allowed" : "pointer",
+              fontWeight: 500, transition: "all 0.15s"
+            }}>{btn.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "10px 14px" }}>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>LAST ACTION</div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>{lead.lastAction}</div>
+        <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 6 }}>→ {lead.nextAction}</div>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard() {
+  const [selectedNiche, setSelectedNiche] = useState("All");
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [activeTab, setActiveTab] = useState("pipeline");
+  const [tick, setTick] = useState(0);
+
+  const [previewLead, setPreviewLead] = useState(null);
+  const [emails, setEmails] = useState(null);
+  const [previewTab, setPreviewTab] = useState("html"); // html or email
+
+  const openPreview = (lead) => {
+    setPreviewLead(lead);
+    setPreviewTab("html");
+    fetch(`http://127.0.0.1:4242/api/lead/${lead.id}/emails`)
+      .then(r => r.json())
+      .then(data => setEmails(data))
+      .catch(e => setEmails({ error: "Failed to load emails" }));
+  };
+
+  const handleEmailChange = (key, value) => {
+    setEmails(prev => ({ ...prev, [key]: value }));
+  };
+
+  const saveEmails = () => {
+    fetch(`http://127.0.0.1:4242/api/lead/${previewLead.id}/emails/update`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(emails)
+    }).then(r => r.json()).then(res => alert(res.message || "Drafts saved successfully!"));
+  };
+
+
+  const [leads, setLeads] = useState(INITIAL_LEADS);
+  const [logs, setLogs] = useState([]);
+
+  const fetchData = () => {
+    fetch("http://127.0.0.1:4242/api/leads")
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setLeads(data); })
+      .catch(e => console.error("Failed to fetch leads", e));
+
+    fetch("http://127.0.0.1:4242/api/activities")
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setLogs(data); })
+      .catch(e => console.error("Failed to fetch activities", e));
+  };
+
+  useEffect(() => {
+    fetchData(); // Fetch immediately once
+    const id = setInterval(() => {
+      setTick(t => t + 1);
+      fetchData(); // Poll every 3 seconds for database updates
+    }, 3000);
+    return () => clearInterval(id);
+  }, []);
+
+  const filteredLeads = leads.filter(l =>
+    selectedNiche === "All" || l.niche === selectedNiche
+  );
+
+  const stats = {
+    totalLeads: leads.length,
+    hotLeads: leads.filter(l => l.score < 25 || l.status === "hot" || l.status === "outreach").length,
+    inOutreach: leads.filter(l => ["outreach", "reply", "demo_sent"].includes(l.status)).length,
+    closed: leads.filter(l => l.status === "closed").length,
+    mrr: leads.filter(l => l.status === "closed").length * 2500,
+  };
+
+  const handleNewScan = () => {
+    const targetNiche = selectedNiche === "All" ? "plumber" : selectedNiche;
+    fetch("http://127.0.0.1:4242/api/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ niche: targetNiche, location: "Austin TX" })
+    })
+      .then(r => r.json())
+      .then(d => alert("✅ Auto-Scan Triggered! The Scout Agent is now hunting for " + targetNiche + " leads in Austin, TX in the background."))
+      .catch(e => alert("❌ Error triggering scan. Ensure webhook_server.py is running."));
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh", background: "#08080f",
+      fontFamily: "'DM Sans', -apple-system, sans-serif",
+      color: "rgba(255,255,255,0.85)", padding: 0
+    }}>
+      {/* Preview Modal */}
+      {previewLead && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", animation: "slideIn 0.2s" }}>
+          <div style={{ background: "#0d0d14", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, width: "90%", maxWidth: 1000, height: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 16 }}>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{previewLead.business} — AI Outputs</div>
+                <div style={{ display: "flex", gap: 8, background: "rgba(255,255,255,0.05)", borderRadius: 6, padding: 4 }}>
+                  <button onClick={() => setPreviewTab("html")} style={{ background: previewTab === "html" ? "#6366f1" : "transparent", color: "#fff", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 12, cursor: "pointer" }}>HTML Preview</button>
+                  <button onClick={() => setPreviewTab("email")} style={{ background: previewTab === "email" ? "#6366f1" : "transparent", color: "#fff", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 12, cursor: "pointer" }}>Email Drafts</button>
+                </div>
+              </div>
+              <button onClick={() => setPreviewLead(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", fontSize: 16, cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ flex: 1, overflow: "auto", position: "relative" }}>
+              {previewTab === "html" ? (
+                <iframe src={`http://127.0.0.1:4242/api/lead/${previewLead.id}/preview.html`} style={{ width: "100%", height: "100%", border: "none" }} />
+              ) : (
+                <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+                  {emails ? (
+                    emails.error ? (
+                      <div style={{ color: "#f43f5e" }}>{emails.error}</div>
+                    ) : (
+                      <>
+                        <div style={{ background: "rgba(255,255,255,0.03)", padding: 16, borderRadius: 8 }}>
+                          <div style={{ fontSize: 12, color: "#f59e0b", marginBottom: 8, fontWeight: 600 }}>EMAIL 1 (Initial Outreach)</div>
+                          <textarea
+                            value={emails.email_1 || ""}
+                            onChange={(e) => handleEmailChange("email_1", e.target.value)}
+                            style={{ width: "100%", height: 120, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, color: "rgba(255,255,255,0.9)", padding: 12, fontSize: 13, fontFamily: "sans-serif", resize: "vertical" }}
+                          />
+                        </div>
+                        <div style={{ background: "rgba(255,255,255,0.03)", padding: 16, borderRadius: 8 }}>
+                          <div style={{ fontSize: 12, color: "#3b82f6", marginBottom: 8, fontWeight: 600 }}>EMAIL 2 (Follow-up)</div>
+                          <textarea
+                            value={emails.email_2 || ""}
+                            onChange={(e) => handleEmailChange("email_2", e.target.value)}
+                            style={{ width: "100%", height: 120, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, color: "rgba(255,255,255,0.9)", padding: 12, fontSize: 13, fontFamily: "sans-serif", resize: "vertical" }}
+                          />
+                        </div>
+                        <div style={{ background: "rgba(255,255,255,0.03)", padding: 16, borderRadius: 8 }}>
+                          <div style={{ fontSize: 12, color: "#a855f7", marginBottom: 8, fontWeight: 600 }}>EMAIL 3 (Break-up)</div>
+                          <textarea
+                            value={emails.email_3 || ""}
+                            onChange={(e) => handleEmailChange("email_3", e.target.value)}
+                            style={{ width: "100%", height: 120, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, color: "rgba(255,255,255,0.9)", padding: 12, fontSize: 13, fontFamily: "sans-serif", resize: "vertical" }}
+                          />
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <button onClick={saveEmails} style={{ background: "#10b981", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: "0 0 10px rgba(16,185,129,0.3)" }}>Save Drafts</button>
+                        </div>
+                      </>
+                    )
+                  ) : "Loading..."}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+        @keyframes ping { 0%, 100% { transform: scale(1); opacity: 0.4; } 50% { transform: scale(2.2); opacity: 0; } }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+      `}</style>
+
+      {/* Header */}
+      <div style={{
+        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        padding: "14px 28px", display: "flex", alignItems: "center", justifyContent: "space-between",
+        background: "rgba(255,255,255,0.015)", backdropFilter: "blur(12px)",
+        position: "sticky", top: 0, zIndex: 100
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 8,
+            background: "linear-gradient(135deg, #6366f1, #a855f7)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 16, fontWeight: 700, boxShadow: "0 0 20px rgba(99,102,241,0.4)"
+          }}>⚡</div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.3 }}>Scale with Jak</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1 }}>Agency OS · Autonomous Pipeline</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
+            <PulsingDot color="#10b981" />
+            <span>4 agents running</span>
+          </div>
+          <div onClick={handleNewScan} style={{
+            background: "linear-gradient(135deg, #6366f1, #a855f7)",
+            borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+            boxShadow: "0 0 14px rgba(99,102,241,0.3)"
+          }}>+ New Scan</div>
+        </div>
+      </div>
+
+      <div style={{ padding: "24px 28px", maxWidth: 1400, margin: "0 auto" }}>
+
+        {/* Stats */}
+        <div style={{ display: "flex", gap: 14, marginBottom: 24, flexWrap: "wrap" }}>
+          <StatCard label="Total Leads" value={stats.totalLeads} sub="across 2 niches" color="#6366f1" icon="🎯" />
+          <StatCard label="Hot Leads" value={stats.hotLeads} sub="score < 25" color="#f43f5e" icon="🔥" />
+          <StatCard label="In Outreach" value={stats.inOutreach} sub="active sequences" color="#f59e0b" icon="📨" />
+          <StatCard label="Deals Closed" value={stats.closed} sub="this month" color="#a855f7" icon="✅" />
+          <StatCard label="MRR" value={`$${stats.mrr.toLocaleString()}`} sub="at $2,500/client" color="#10b981" icon="💰" />
+        </div>
+
+        {/* Nav */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: 0 }}>
+          {[
+            { key: "pipeline", label: "Pipeline" },
+            { key: "agents", label: "Agents" },
+            { key: "activity", label: "Activity Feed" },
+            { key: "architecture", label: "System Architecture" },
+          ].map(tab => (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
+              background: "none", border: "none", cursor: "pointer",
+              padding: "8px 16px", fontSize: 13, fontWeight: 500,
+              color: activeTab === tab.key ? "#fff" : "rgba(255,255,255,0.35)",
+              borderBottom: `2px solid ${activeTab === tab.key ? "#6366f1" : "transparent"}`,
+              transition: "all 0.15s", marginBottom: -1
+            }}>{tab.label}</button>
+          ))}
+        </div>
+
+        {/* Pipeline Tab */}
+        {activeTab === "pipeline" && (
+          <div style={{ display: "grid", gridTemplateColumns: selectedLead ? "1fr 380px" : "1fr", gap: 20 }}>
+            <div>
+              {/* Niche filter */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                {["All", ...NICHES].map(n => (
+                  <button key={n} onClick={() => setSelectedNiche(n)} style={{
+                    background: selectedNiche === n ? "rgba(99,102,241,0.2)" : "rgba(255,255,255,0.04)",
+                    border: `1px solid ${selectedNiche === n ? "#6366f1" : "rgba(255,255,255,0.08)"}`,
+                    color: selectedNiche === n ? "#a5b4fc" : "rgba(255,255,255,0.4)",
+                    borderRadius: 7, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontWeight: 500
+                  }}>{n}</button>
+                ))}
+              </div>
+
+              {/* Kanban columns */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+                {PIPELINE_STAGES.map(stage => {
+                  const stageLeads = filteredLeads.filter(l => l.status === stage.key);
+                  return (
+                    <div key={stage.key} style={{ background: "rgba(255,255,255,0.02)", borderRadius: 12, padding: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                        <span style={{ fontSize: 14 }}>{stage.icon}</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: stage.color, textTransform: "uppercase", letterSpacing: 0.5 }}>{stage.label}</span>
+                        <span style={{
+                          marginLeft: "auto", fontSize: 10, background: stage.bg,
+                          color: stage.color, borderRadius: 4, padding: "1px 6px",
+                          fontFamily: "'Space Mono', monospace"
+                        }}>{stageLeads.length}</span>
+                      </div>
+                      {stageLeads.length === 0 && (
+                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.15)", textAlign: "center", padding: "12px 0" }}>Empty</div>
+                      )}
+                      {stageLeads.map(lead => (
+                        <LeadCard key={lead.id} lead={lead} onClick={setSelectedLead} selected={selectedLead?.id === lead.id} />
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Detail panel */}
+            {selectedLead && (
+              <div style={{ animation: "slideIn 0.2s ease-out" }}>
+                <LeadDetail lead={selectedLead} onClose={() => setSelectedLead(null)} onOpenPreview={openPreview} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Agents Tab */}
+        {activeTab === "agents" && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+            {AGENTS.map(agent => (
+              <div key={agent.id} style={{
+                background: "rgba(255,255,255,0.03)", border: `1px solid ${agent.status === "running" ? agent.color + "30" : "rgba(255,255,255,0.07)"}`,
+                borderRadius: 14, padding: 20, animation: "slideIn 0.2s ease-out"
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 26 }}>{agent.icon}</span>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>{agent.name}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+                        <PulsingDot color={agent.status === "running" ? agent.color : "#444"} />
+                        <span style={{ fontSize: 10, color: agent.status === "running" ? agent.color : "#555", textTransform: "uppercase", letterSpacing: 1 }}>
+                          {agent.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button style={{
+                    background: agent.status === "running" ? "rgba(244,63,94,0.1)" : "rgba(16,185,129,0.1)",
+                    border: `1px solid ${agent.status === "running" ? "#f43f5e40" : "#10b98140"}`,
+                    color: agent.status === "running" ? "#f43f5e" : "#10b981",
+                    borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer"
+                  }}>{agent.status === "running" ? "Pause" : "Resume"}</button>
+                </div>
+
+                <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "10px 12px", marginBottom: 14, fontSize: 11, color: "rgba(255,255,255,0.5)", fontStyle: "italic" }}>
+                  {agent.task}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Space Mono', monospace", color: agent.color }}>{agent.processed}</div>
+                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 0.5 }}>Processed</div>
+                  </div>
+                  <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Space Mono', monospace", color: agent.color }}>{agent.found}</div>
+                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 0.5 }}>Actioned</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Config panel */}
+            <div style={{
+              background: "rgba(255,255,255,0.02)", border: "1px dashed rgba(255,255,255,0.1)",
+              borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 14
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.5)" }}>⚙️ Pipeline Config</div>
+              {[
+                { label: "Target Niches", value: "Med Spas, Vet Clinics" },
+                { label: "Max Score (Hot)", value: "< 25 / 100" },
+                { label: "Email Sequence", value: "3 emails / 7 days" },
+                { label: "Invoice Amount", value: "$2,500 / client" },
+                { label: "Monthly Retainer", value: "$2,500 / mo" },
+              ].map(cfg => (
+                <div key={cfg.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
+                  <span style={{ color: "rgba(255,255,255,0.35)" }}>{cfg.label}</span>
+                  <span style={{ color: "rgba(255,255,255,0.75)", fontFamily: "'Space Mono', monospace", fontSize: 11 }}>{cfg.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Activity Feed */}
+        {activeTab === "activity" && (
+          <div style={{ maxWidth: 680 }}>
+            {logs.length === 0 && <div style={{ color: "rgba(255,255,255,0.4)" }}>No agent activity mapped yet. Start a scan!</div>}
+            {logs.map((item, i) => (
+              <div key={i} style={{
+                display: "flex", gap: 14, padding: "14px 0",
+                borderBottom: "1px solid rgba(255,255,255,0.05)",
+                animation: "slideIn 0.2s ease-out", animationDelay: `${i * 0.04}s`, animationFillMode: "both"
+              }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: `${item.color}18`, border: `1px solid ${item.color}30`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: item.color }}>{item.agent[0]}</span>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: item.color }}>{item.agent} Agent</span>
+                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)" }}>·</span>
+                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", fontFamily: "'Space Mono', monospace" }}>{item.time}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}>{item.msg}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Architecture Tab */}
+        {activeTab === "architecture" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingBottom: 40, animation: "slideIn 0.2s ease-out" }}>
+            <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 24 }}>
+                <h3 style={{ fontSize: 18, marginBottom: 16, color: "rgba(255,255,255,0.9)", fontWeight: 600 }}>Universal Growth Engine Funnel</h3>
+                <img src="./buisness growth_engine_funnel_v2_final_1773266311710.png" style={{ width: "100%", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)" }} alt="Universal Growth Engine Funnel" />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<Dashboard />);
+  </script>
+</body>
+</html>

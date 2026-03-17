@@ -1,0 +1,47 @@
+node_modules/
+.next/
+.env
+.env.local
+.env.production
+.env*.local
+
+# Python
+venv/
+.venv/
+ai_agency/venv/
+agents/venv/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.pid
+
+# Python packages (will be installed from requirements.txt)
+ai_agency/*/
+!ai_agency/*.py
+!ai_agency/*.md
+!ai_agency/*.txt
+!ai_agency/*.sh
+!ai_agency/bin/
+
+# Playwright
+.playwright-browsers/
+ai_agency/pw-browsers/
+ai_agency/.playwright-browsers/
+
+# Local outputs (ephemeral — do not commit)
+ai_agency/leads_generated/
+leads_generated/
+ai_agency/agency.db
+*.db
+
+# OS
+.DS_Store
+
+# Deployment
+.vercel
+
+# Temporary files
+.env_live
+*.tmp
+.tmp/

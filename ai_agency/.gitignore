@@ -1,0 +1,38 @@
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Installed packages (install from requirements.txt)
+*/
+!bin/
+*.so
+*-info/
+*.dist-info/
+
+# Playwright browsers
+pw-browsers/
+.playwright-browsers/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+*.pid
+
+# Generated files
+leads_generated/
+*.tsv
+diagnostic_*.txt
+swarm_*.txt
+ui_screenshot.png
