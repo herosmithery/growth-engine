@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Building2, FileText, Webhook, Bell, Settings as SettingsIcon, Save, Plus, Edit, Trash2, Copy, ExternalLink, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Building2, FileText, Webhook, Bell, Settings as SettingsIcon, Save, Plus, Edit, Trash2, Copy, ExternalLink, CheckCircle, XCircle, AlertCircle, CreditCard, Loader2, Crown, Zap, Star, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase, type Business, type Settings, type TreatmentTemplate } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 
-type Tab = 'business' | 'treatments' | 'crm' | 'notifications' | 'integrations';
+type Tab = 'business' | 'treatments' | 'crm' | 'notifications' | 'integrations' | 'billing';
 
 interface BusinessInfo {
     name: string;
@@ -403,6 +403,7 @@ export default function SettingsPage() {
         { id: 'crm' as Tab, label: 'CRM Connection', icon: Webhook },
         { id: 'notifications' as Tab, label: 'Notifications', icon: Bell },
         { id: 'integrations' as Tab, label: 'Integrations', icon: SettingsIcon },
+        { id: 'billing' as Tab, label: 'Billing', icon: CreditCard },
     ];
 
     if (authLoading || loading) {
@@ -1126,6 +1127,11 @@ export default function SettingsPage() {
                                 </button>
                             </div>
                         )}
+
+                        {/* Billing Tab */}
+                        {activeTab === 'billing' && businessId && (
+                            <BillingTab businessId={businessId} />
+                        )}
                     </div>
                 </div>
             </main>
@@ -1379,4 +1385,160 @@ function ElevenLabsVoicePanel() {
             )}
         </div>
     );
+}
+
+// ─────────────────────────────────────────────
+// Billing Tab Component
+// ─────────────────────────────────────────────
+const PLAN_INFO = {
+  starter: { name: 'Starter', price: 297, icon: Zap, color: 'text-blue-600', bg: 'bg-blue-50', features: ['50 AI calls/mo', '200 SMS/mo', '2 campaigns', '200 clients'] },
+  growth: { name: 'Growth', price: 497, icon: Star, color: 'text-purple-600', bg: 'bg-purple-50', features: ['150 AI calls/mo', '500 SMS/mo', '5 campaigns', '500 clients'] },
+  enterprise: { name: 'Enterprise', price: 997, icon: Crown, color: 'text-amber-600', bg: 'bg-amber-50', features: ['Unlimited calls', 'Unlimited SMS', 'Unlimited campaigns', 'Dedicated manager'] },
+};
+
+function BillingTab({ businessId }: { businessId: string }) {
+  const [subData, setSubData] = useState<any>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [portalLoading, setPortalLoading] = useState(false);
+
+  useEffect(() => {
+    const { createBrowserClient } = require('@supabase/ssr');
+    const sb = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    Promise.all([
+      sb.from('businesses').select('subscription_plan, subscription_status, subscription_current_period_end, mrr, stripe_customer_id').eq('id', businessId).single(),
+      sb.from('subscription_history').select('*').eq('business_id', businessId).order('created_at', { ascending: false }).limit(5),
+    ]).then((results: any[]) => {
+      setSubData(results[0].data);
+      setHistory(results[1].data || []);
+    }).finally(() => setLoading(false));
+  }, [businessId]);
+
+  const openPortal = async () => {
+    setPortalLoading(true);
+    try {
+      const res = await fetch('/api/stripe/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId }),
+      });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
+
+  const plan = subData?.subscription_plan || 'starter';
+  const status = subData?.subscription_status || 'active';
+  const periodEnd = subData?.subscription_current_period_end;
+  const planInfo = PLAN_INFO[plan as keyof typeof PLAN_INFO] || PLAN_INFO.starter;
+  const PlanIcon = planInfo.icon;
+
+  const statusColor = status === 'active' ? 'bg-green-100 text-green-800' :
+                      status === 'past_due' ? 'bg-red-100 text-red-800' :
+                      status === 'trial' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800';
+
+  return (
+    <div className="space-y-6">
+      {/* Current Plan Card */}
+      <div className={`rounded-xl border-2 p-6 ${planInfo.bg} border-current/10`}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className={`w-12 h-12 rounded-xl ${planInfo.bg} flex items-center justify-center`}>
+              <PlanIcon className={`w-6 h-6 ${planInfo.color}`} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold">{planInfo.name} Plan</h3>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusColor}`}>
+                  {status}
+                </span>
+              </div>
+              <p className="text-2xl font-bold mt-1">${planInfo.price}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
+            </div>
+          </div>
+
+          {subData?.stripe_customer_id ? (
+            <button
+              onClick={openPortal}
+              disabled={portalLoading}
+              className="flex items-center gap-2 px-4 py-2 bg-white border rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              {portalLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+              Manage Billing
+            </button>
+          ) : (
+            <a
+              href="/pricing"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90"
+            >
+              <TrendingUp className="h-4 w-4" />
+              Upgrade Plan
+            </a>
+          )}
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {planInfo.features.map(f => (
+            <div key={f} className="flex items-center gap-2 text-sm">
+              <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+              <span>{f}</span>
+            </div>
+          ))}
+        </div>
+
+        {periodEnd && (
+          <p className="mt-4 text-xs text-muted-foreground">
+            Next billing date: {new Date(periodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+          </p>
+        )}
+      </div>
+
+      {/* Payment History */}
+      {history.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Billing History</h4>
+          <div className="rounded-lg border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-left p-3 font-medium">Event</th>
+                  <th className="text-left p-3 font-medium">Plan</th>
+                  <th className="text-right p-3 font-medium">Amount</th>
+                  <th className="text-right p-3 font-medium">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((h: any) => (
+                  <tr key={h.id} className="border-t">
+                    <td className="p-3 capitalize">{h.event_type.replace('_', ' ')}</td>
+                    <td className="p-3 capitalize">{h.to_plan || h.from_plan || '—'}</td>
+                    <td className="p-3 text-right">{h.amount_cents ? `$${(h.amount_cents / 100).toFixed(2)}` : '—'}</td>
+                    <td className="p-3 text-right text-muted-foreground">{new Date(h.created_at).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Need help */}
+      <div className="rounded-lg bg-muted/50 p-4 flex items-start gap-3">
+        <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+        <div className="text-sm text-muted-foreground">
+          <p>Questions about your plan? Contact your account manager or email <span className="font-medium text-foreground">support@scalewithjak.com</span></p>
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -10,7 +10,7 @@ const plans = [
   {
     id: 'starter',
     name: 'Starter',
-    price: 997,
+    price: 297,
     description: 'Perfect for small med spas getting started with AI',
     icon: Zap,
     features: [
@@ -27,7 +27,7 @@ const plans = [
   {
     id: 'growth',
     name: 'Growth',
-    price: 1497,
+    price: 497,
     description: 'For growing practices ready to scale',
     icon: Star,
     features: [
@@ -47,7 +47,7 @@ const plans = [
   {
     id: 'enterprise',
     name: 'Enterprise',
-    price: 2497,
+    price: 997,
     description: 'For established practices with high volume',
     icon: Crown,
     features: [

@@ -10,6 +10,7 @@ import { SidebarProvider } from "@/components/ui/sidebar"
 import { ModeProvider } from "@/providers/mode-provider"
 import { ThemeProvider } from "@/providers/theme-provider"
 import { RootLayoutWrapper } from "@/components/RootLayoutWrapper"
+import { BrandingInjector } from "@/components/BrandingInjector"
 
 export function Providers({ children, locale = "en-US" }: { children: ReactNode, locale?: any }) {
     return (
@@ -19,6 +20,7 @@ export function Providers({ children, locale = "en-US" }: { children: ReactNode,
                     <ThemeProvider>
                         <SidebarProvider>
                             <AuthProvider>
+                                <BrandingInjector />
                                 <RootLayoutWrapper>
                                     {children}
                                 </RootLayoutWrapper>

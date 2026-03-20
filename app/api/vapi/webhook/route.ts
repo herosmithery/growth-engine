@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import fs from 'fs';
-import path from 'path';
+import { google } from 'googleapis';
 
+const IS_LOCAL = process.env.NODE_ENV !== 'production';
 const LOG_FILE = '/Users/johnkraeger/Downloads/growth engine/ai_agency/webhook_debug.log';
 
 function logToFile(msg: string) {
   const timestamp = new Date().toISOString();
-  fs.appendFileSync(LOG_FILE, `[${timestamp}] ${msg}\n`);
+  const line = `[${timestamp}] ${msg}`;
+  if (IS_LOCAL) {
+    try {
+      const fs = require('fs');
+      fs.appendFileSync(LOG_FILE, line + '\n');
+    } catch {}
+  }
+  console.log('[VAPI]', msg);
 }
 
 const supabase = createClient(
@@ -396,20 +403,22 @@ async function handleFunctionCall(payload: VAPIWebhookPayload, businessId: strin
 
 // Function Handlers
 async function handleCheckAvailability(params: any, businessId: string): Promise<NextResponse> {
-  const { date, treatment_type } = params;
+  const { date } = params;
 
-  // Get business hours
+  // Get business with Google Calendar tokens
   const { data: business } = await supabase
     .from('businesses')
-    .select('business_hours')
+    .select('business_hours, google_calendar_tokens, google_calendar_id, google_calendar_sync_enabled')
     .eq('id', businessId)
     .single();
 
-  // Get existing appointments for the date
   const targetDate = date ? new Date(date) : new Date();
-  const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
-  const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+  const startOfDay = new Date(targetDate);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(targetDate);
+  endOfDay.setHours(23, 59, 59, 999);
 
+  // Get booked hours from Supabase appointments
   const { data: appointments } = await supabase
     .from('appointments')
     .select('start_time, end_time')
@@ -418,18 +427,56 @@ async function handleCheckAvailability(params: any, businessId: string): Promise
     .lte('start_time', endOfDay.toISOString())
     .neq('status', 'cancelled');
 
-  // Generate available slots (simplified - 60 min slots from 9am-5pm)
-  const slots = [];
-  const bookedTimes = appointments?.map(a => new Date(a.start_time).getHours()) || [];
+  const bookedHours = new Set(appointments?.map(a => new Date(a.start_time).getHours()) || []);
 
+  // Also check Google Calendar busy times if connected
+  if (business?.google_calendar_tokens && business.google_calendar_sync_enabled) {
+    try {
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/google-calendar/callback`
+      );
+      oauth2Client.setCredentials(business.google_calendar_tokens);
+
+      // Refresh token if expired
+      if (business.google_calendar_tokens.expiry_date < Date.now()) {
+        const { credentials } = await oauth2Client.refreshAccessToken();
+        oauth2Client.setCredentials(credentials);
+        await supabase.from('businesses').update({ google_calendar_tokens: credentials }).eq('id', businessId);
+      }
+
+      const cal = google.calendar({ version: 'v3', auth: oauth2Client });
+      const freebusyRes = await cal.freebusy.query({
+        requestBody: {
+          timeMin: startOfDay.toISOString(),
+          timeMax: endOfDay.toISOString(),
+          items: [{ id: business.google_calendar_id || 'primary' }],
+        },
+      });
+
+      const busyPeriods = freebusyRes.data.calendars?.[business.google_calendar_id || 'primary']?.busy || [];
+      for (const period of busyPeriods) {
+        if (period.start && period.end) {
+          const busyStart = new Date(period.start).getHours();
+          const busyEnd = new Date(period.end).getHours();
+          for (let h = busyStart; h < busyEnd; h++) bookedHours.add(h);
+        }
+      }
+    } catch (err) {
+      console.error('[VAPI] Google Calendar freebusy check failed:', err);
+      // Continue with Supabase-only availability
+    }
+  }
+
+  // Generate available 60-min slots 9am–5pm
+  const slots = [];
   for (let hour = 9; hour < 17; hour++) {
-    if (!bookedTimes.includes(hour)) {
+    if (!bookedHours.has(hour)) {
       const slotTime = new Date(startOfDay);
       slotTime.setHours(hour, 0, 0, 0);
-      slots.push({
-        time: `${hour}:00 ${hour < 12 ? 'AM' : 'PM'}`,
-        datetime: slotTime.toISOString(),
-      });
+      const label = `${hour > 12 ? hour - 12 : hour}:00 ${hour < 12 ? 'AM' : 'PM'}`;
+      slots.push({ time: label, datetime: slotTime.toISOString() });
     }
   }
 
@@ -439,12 +486,12 @@ async function handleCheckAvailability(params: any, businessId: string): Promise
       result: {
         available: slots.length > 0,
         date: targetDate.toDateString(),
-        slots: slots.slice(0, 5), // Return top 5 slots
+        slots: slots.slice(0, 5),
         message: slots.length > 0
           ? `I have ${slots.length} slots available. The next available times are ${slots.slice(0, 3).map(s => s.time).join(', ')}.`
-          : 'Sorry, no availability on that date. Would you like to try another day?'
-      }
-    }]
+          : 'Sorry, no availability on that date. Would you like to try another day?',
+      },
+    }],
   });
 }
 
@@ -540,6 +587,19 @@ async function handleBookAppointment(params: any, businessId: string, callId?: s
       .update({ appointment_id: appointment.id, outcome: 'booked' })
       .eq('vapi_call_id', callId);
   }
+
+  // Queue Google Calendar sync for this appointment
+  await supabase.from('calendar_sync_log').insert({
+    business_id: businessId,
+    appointment_id: appointment.id,
+    sync_direction: 'to_google',
+    sync_action: 'create',
+    status: 'pending',
+  });
+
+  // Fire-and-forget: trigger the sync endpoint so it happens immediately
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  fetch(`${appUrl}/api/calendar/sync?business_id=${businessId}`, { method: 'POST' }).catch(() => {});
 
   const formattedTime = appointmentTime.toLocaleString('en-US', {
     weekday: 'long',
@@ -682,11 +742,11 @@ async function createAppointmentFromCall(callId: string, callerPhone: string, bu
     .single();
 
   if (aptError) {
-    console.error('[VAPI] Failed to create appointment:', aptError);
+    logToFile(`[VAPI] Failed to create appointment: ${JSON.stringify(aptError)}`);
     return;
   }
 
-  console.log(`[VAPI] Created appointment ${appointment.id} for client ${clientId}`);
+  logToFile(`[VAPI] Created appointment ${appointment.id} for client ${clientId}`);
 
   // Link appointment to call log
   await supabase

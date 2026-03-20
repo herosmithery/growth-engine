@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+import { SubscriptionGate } from '@/components/SubscriptionGate';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { AgentCard } from '@/components/dashboard/AgentCard';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
@@ -180,21 +181,62 @@ export default function HomePage() {
         sage: { nurtureSent: sageNurtureSent || 0, engagementRate: `${sageEngagement}%`, leadsConverted: sageLeadsConverted || 0 },
       });
 
-      // Recent activity
-      const { data: recentMessages } = await supabase
-        .from('messages')
-        .select('*, clients(first_name, last_name)')
-        .eq('business_id', businessId)
-        .order('created_at', { ascending: false })
-        .limit(5);
+      // Recent activity — pull from calls, appointments, and messages in parallel
+      const [
+        { data: recentCalls },
+        { data: recentAppointments },
+        { data: recentMessages },
+      ] = await Promise.all([
+        supabase
+          .from('call_logs')
+          .select('id, caller_phone, caller_name, outcome, duration_seconds, created_at, clients(first_name, last_name)')
+          .eq('business_id', businessId)
+          .order('created_at', { ascending: false })
+          .limit(10),
+        supabase
+          .from('appointments')
+          .select('id, treatment_type, start_time, status, source, created_at, clients(first_name, last_name)')
+          .eq('business_id', businessId)
+          .order('created_at', { ascending: false })
+          .limit(10),
+        supabase
+          .from('messages')
+          .select('id, channel, created_at, clients(first_name, last_name)')
+          .eq('business_id', businessId)
+          .order('created_at', { ascending: false })
+          .limit(10),
+      ]);
 
-      setRecentActivity(recentMessages?.map((msg: any) => ({
-        id: msg.id,
-        type: msg.channel === 'sms' ? 'sms' : msg.channel === 'email' ? 'email' : 'sms',
-        description: `${msg.channel?.toUpperCase() || 'MSG'} sent to ${msg.clients?.first_name || 'Unknown'} ${msg.clients?.last_name || ''}`.trim(),
+      const callActivities = (recentCalls || []).map((c: any) => ({
+        id: `call-${c.id}`,
+        type: 'call' as const,
+        description: `AI call ${c.outcome === 'booked' ? '📅 booked appointment' : c.outcome === 'dropped' ? 'dropped' : 'handled'} — ${c.clients?.first_name ? `${c.clients.first_name} ${c.clients.last_name || ''}` : c.caller_phone || 'unknown caller'}`,
+        time: new Date(c.created_at).toLocaleString(),
+        status: c.outcome === 'booked' ? 'success' as const : 'info' as const,
+      }));
+
+      const apptActivities = (recentAppointments || []).map((a: any) => ({
+        id: `appt-${a.id}`,
+        type: 'appointment' as const,
+        description: `${a.source === 'ai_phone' ? 'AI booked' : 'Appointment'}: ${a.treatment_type || 'visit'} — ${a.clients?.first_name ? `${a.clients.first_name} ${a.clients.last_name || ''}` : 'client'} (${a.status})`,
+        time: new Date(a.created_at).toLocaleString(),
+        status: a.status === 'confirmed' || a.status === 'completed' ? 'success' as const : 'pending' as const,
+      }));
+
+      const msgActivities = (recentMessages || []).map((msg: any) => ({
+        id: `msg-${msg.id}`,
+        type: (msg.channel === 'email' ? 'email' : 'sms') as 'email' | 'sms',
+        description: `${msg.channel?.toUpperCase() || 'SMS'} sent to ${msg.clients?.first_name || 'client'}`,
         time: new Date(msg.created_at).toLocaleString(),
         status: 'success' as const,
-      })) || []);
+      }));
+
+      // Merge and sort by most recent, show top 10
+      const allActivity = [...callActivities, ...apptActivities, ...msgActivities]
+        .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+        .slice(0, 10);
+
+      setRecentActivity(allActivity);
 
       // Fetch monthly chart data (last 6 months)
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -326,6 +368,7 @@ export default function HomePage() {
   }
 
   return (
+    <SubscriptionGate>
     <div className="space-y-8">
       {/* Welcome Section with Tabs */}
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-[var(--border)] p-6">
@@ -433,5 +476,6 @@ export default function HomePage() {
         </>
       )}
     </div>
+    </SubscriptionGate>
   );
 }

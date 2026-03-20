@@ -43,7 +43,7 @@ export function Sidebar() {
   const { openMobile, setOpenMobile, isMobile } = useSidebar()
   const { settings } = useSettings()
 
-  const { businessName, isAdmin, user, signOut } = useAuth()
+  const { businessName, branding, isAdmin, user, signOut } = useAuth()
   const isLoggedIn = !!user;
 
   const isHoizontalAndDesktop = settings.layout === "horizontal" && !isMobile
@@ -120,12 +120,27 @@ export function Sidebar() {
           className="w-fit flex text-foreground font-black p-2 pb-0 mb-2 items-center gap-3"
           onClick={() => isMobile && setOpenMobile(!openMobile)}
         >
-          <div className="w-6 h-6 rounded-md bg-[var(--primary)] dark:bg-white flex items-center justify-center">
-            <Sparkles className="w-3 h-3 text-white dark:text-black" />
-          </div>
+          {branding?.logoUrl ? (
+            <img
+              src={branding.logoUrl}
+              alt={businessName || 'Logo'}
+              className="w-7 h-7 rounded-md object-contain"
+            />
+          ) : (
+            <div
+              className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
+              style={{ backgroundColor: branding?.primaryColor || 'var(--primary)' }}
+            >
+              {businessName ? (
+                <span className="text-white text-xs font-bold">{businessName.slice(0, 2).toUpperCase()}</span>
+              ) : (
+                <Sparkles className="w-3 h-3 text-white" />
+              )}
+            </div>
+          )}
           <div className="flex flex-col">
-            <span>Growth Engine</span>
-            <span className="text-xs font-normal text-muted-foreground">by Scale with Jak</span>
+            <span>{businessName || 'Growth Engine'}</span>
+            <span className="text-xs font-normal text-muted-foreground">Powered by Scale with Jak</span>
           </div>
         </Link>
         <CommandMenu buttonClassName="max-w-full" />

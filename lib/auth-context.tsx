@@ -4,12 +4,20 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { createBrowserClient } from '@supabase/ssr';
 import { User, Session } from '@supabase/supabase-js';
 
+export interface BusinessBranding {
+    logoUrl: string | null;
+    primaryColor: string;
+    secondaryColor: string;
+    slug: string | null;
+}
+
 interface AuthContextType {
     user: User | null;
     session: Session | null;
     businessId: string | null;
     businessName: string | null;
     niche: string | null;
+    branding: BusinessBranding;
     isAdmin: boolean;
     loading: boolean;
     signOut: () => Promise<void>;
@@ -23,6 +31,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [businessId, setBusinessId] = useState<string | null>(null);
     const [businessName, setBusinessName] = useState<string | null>(null);
     const [niche, setNiche] = useState<string | null>(null);
+    const [branding, setBranding] = useState<BusinessBranding>({
+        logoUrl: null,
+        primaryColor: '#7c3aed',
+        secondaryColor: '#a78bfa',
+        slug: null,
+    });
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
 
@@ -85,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setBusinessName(null);
             setNiche(null);
             setIsAdmin(false);
+            setBranding({ logoUrl: null, primaryColor: '#7c3aed', secondaryColor: '#a78bfa', slug: null });
         }
     }
 
@@ -93,28 +108,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // First check if user has a business linked via user_businesses junction table
             const { data: userBusiness, error: junctionError } = await supabase
                 .from('user_businesses')
-                .select('business_id, businesses(id, name)')
+                .select('business_id, businesses(id, name, niche_type, logo_url, primary_color, secondary_color, slug)')
                 .eq('user_id', userId)
                 .single();
 
             if (!junctionError && userBusiness) {
+                const biz = userBusiness.businesses as any;
                 setBusinessId(userBusiness.business_id);
-                setBusinessName((userBusiness.businesses as any)?.name || null);
-                setNiche((userBusiness.businesses as any)?.niche_type || 'general');
+                setBusinessName(biz?.name || null);
+                setNiche(biz?.niche_type || 'general');
+                setBranding({
+                    logoUrl: biz?.logo_url || null,
+                    primaryColor: biz?.primary_color || '#7c3aed',
+                    secondaryColor: biz?.secondary_color || '#a78bfa',
+                    slug: biz?.slug || null,
+                });
                 return;
             }
 
             // Fallback: check businesses table directly if owner_id matches
             const { data: ownedBusiness, error: ownerError } = await supabase
                 .from('businesses')
-                .select('id, name')
+                .select('id, name, niche_type, logo_url, primary_color, secondary_color, slug')
                 .eq('owner_id', userId)
                 .single();
 
             if (!ownerError && ownedBusiness) {
                 setBusinessId(ownedBusiness.id);
                 setBusinessName(ownedBusiness.name);
-                setNiche('general');
+                setNiche(ownedBusiness.niche_type || 'general');
+                setBranding({
+                    logoUrl: ownedBusiness.logo_url || null,
+                    primaryColor: ownedBusiness.primary_color || '#7c3aed',
+                    secondaryColor: ownedBusiness.secondary_color || '#a78bfa',
+                    slug: ownedBusiness.slug || null,
+                });
                 return;
             }
 
@@ -133,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setBusinessName(null);
         setNiche(null);
         setIsAdmin(false);
+        setBranding({ logoUrl: null, primaryColor: '#7c3aed', secondaryColor: '#a78bfa', slug: null });
     }
 
     return (
@@ -143,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 businessId,
                 businessName,
                 niche,
+                branding,
                 isAdmin,
                 loading,
                 signOut,

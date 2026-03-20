@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   // Get business
   const { data: business } = await supabase
     .from('businesses')
-    .select('id, name, vapi_phone_number_id')
+    .select('id, name, vapi_phone_number, vapi_assistant_id')
     .limit(1)
     .single();
 
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       steps: [
         {
           type: 'call-start',
-          payload: createCallStartPayload(callId, business.vapi_phone_number_id, testPhoneNumber, 'Test Customer'),
+          payload: createCallStartPayload(callId, business.vapi_phone_number || null, testPhoneNumber, 'Test Customer'),
         },
         {
           type: 'function-call',
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
         },
         {
           type: 'call-end',
-          payload: createCallEndPayload(callId, business.vapi_phone_number_id, testPhoneNumber, 'booked'),
+          payload: createCallEndPayload(callId, business.vapi_phone_number || null, testPhoneNumber, 'booked'),
         },
       ],
     },
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       steps: [
         {
           type: 'call-start',
-          payload: createCallStartPayload(callId, business.vapi_phone_number_id, testPhoneNumber, 'Curious Caller'),
+          payload: createCallStartPayload(callId, business.vapi_phone_number || null, testPhoneNumber, 'Curious Caller'),
         },
         {
           type: 'function-call',
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
         },
         {
           type: 'call-end',
-          payload: createCallEndPayload(callId, business.vapi_phone_number_id, testPhoneNumber, 'info_only'),
+          payload: createCallEndPayload(callId, business.vapi_phone_number || null, testPhoneNumber, 'info_only'),
         },
       ],
     },
@@ -75,11 +75,11 @@ export async function POST(request: NextRequest) {
       steps: [
         {
           type: 'call-start',
-          payload: createCallStartPayload(callId, business.vapi_phone_number_id, testPhoneNumber, null),
+          payload: createCallStartPayload(callId, business.vapi_phone_number || null, testPhoneNumber, null),
         },
         {
           type: 'call-end',
-          payload: createCallEndPayload(callId, business.vapi_phone_number_id, testPhoneNumber, 'dropped', 5),
+          payload: createCallEndPayload(callId, business.vapi_phone_number || null, testPhoneNumber, 'dropped', 5),
         },
       ],
     },
